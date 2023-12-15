@@ -2,6 +2,8 @@ from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
 import json
 import pymongo
 
+mongoURI = "mongodb://cosmosrgeastus84ace774-df7d-4274-88a1db:x1tIVM8HBIH5J8sF20oXD4vNYVLpUHuoPjLgqS31oQDBAvdQnIocM9yUBtmTJV3hxE8lmBXn5rNBACDbthcD2A==@cosmosrgeastus84ace774-df7d-4274-88a1db.mongo.cosmos.azure.com:10255/?ssl=true&replicaSet=globaldb&retrywrites=false&maxIdleTimeMS=120000&appName=@cosmosrgeastus84ace774-df7d-4274-88a1db@"
+
 class messengerer(BaseHTTPRequestHandler):
     def _set_headers(self):
         self.send_response(200)
@@ -14,9 +16,9 @@ class messengerer(BaseHTTPRequestHandler):
             self._set_headers()
             post_data = self.rfile.read('content_length')
             data = json.loads(post_data)
-            client = pymongo.MongoClient('mongodb://localhost:27017/')
+            client = pymongo.MongoClient(mongoURI)
             db = client['mydb']
-            users = db.users
+            users = db['users']
             output = []
             try:
                 output.append(users.find_one({'username':data['username'],'password':data['password']}))
@@ -28,9 +30,9 @@ class messengerer(BaseHTTPRequestHandler):
             self._set_headers()
             post_data = self.rfile.read('content_length')
             data = json.loads(post_data)
-            client = pymongo.MongoClient('mongodb://localhost:27017/')
+            client = pymongo.MongoClient(mongoURI)
             db = client['mydb']
-            users = db.users
+            users = db['users']
             output = {}
             try:
                 checkUser = output.append(users.find_one({'username':data['username'],'password':data['password']}))
@@ -43,27 +45,30 @@ class messengerer(BaseHTTPRequestHandler):
             self._set_headers()
             post_data = self.rfile.read('content_length')
             data = json.loads(post_data)
-            client = pymongo.MongoClient('mongodb://localhost:27017/')
+            client = pymongo.MongoClient(mongoURI)
             db = client['mydb']
-            chats = db.chats
+            chats = db["chats"]
             output = []
             try:
-                output.append(chats.find({'member':data['user']}))
+                results = chats.find({"$or": [{'participant1':data['participant1']},{"participant2": data['participant2']}]})
+                for i in results:
+                    output.append(i)
             except:
                 print('No messages found')
             self.wfile.write(json.dumps(output))
 
-        if self.path.endswith('/getMessages'):
+        if self.path.endswith('/getAllMessages'):
             self._set_headers()
             post_data = self.rfile.read('content_length')
             data = json.loads(post_data)
-            client = pymongo.MongoClient('mongodb://localhost:27017/')
+            client = pymongo.MongoClient(mongoURI)
             db = client['mydb']
-            messages = db.messages
+            messages = db['messages']
             output = []
             try:
-                output.append(messages.find({'sender':data['sender'],'recipient':data['recipient']}))
-                output.append(messages.find({'sender':data['recipient'],'recipient':data['sender']}))
+                results = messages.find({"$and" : [{"sender" : {"$or" : [data['sender'],data['recipient']]}} , {"recipient" : {"$or" : [data['sender'], data['recipient']]}}]}).sort['time']
+                for i in results:
+                    output.append(i)
             except:
                 print('No messages found')
             self.wfile.write(json.dumps(output))
@@ -72,13 +77,25 @@ class messengerer(BaseHTTPRequestHandler):
             self._set_headers()
             post_data = self.rfile.read('content_length')
             data = json.loads(post_data)
-            client = pymongo.MongoClient('mongodb://localhost:27017/')
+            client = pymongo.MongoClient(mongoURI)
             db = client['mydb']
-            messages = db.messages
+            messages = db['messages']
             try:
                 messages.insert_one(data)
             except:
                 print('message failed')
+
+        if self.path.endswith('/newChat'):
+            self._set_headers()
+            post_data = self.rfile.read('content_length')
+            data = json.loads(post_data)
+            client = pymongo.MongoClient(mongoURI)
+            db = client['mydb']
+            chats = db['chats']
+            try:
+                chats.insert_one(data)
+            except:
+                print('chat creation failed')
             
 
 def run(server_class=HTTPServer,handler_class=messengerer,port=""):
